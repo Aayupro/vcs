@@ -7,9 +7,6 @@
 #include <cstring>
 #include <cstdlib>
 
-// =============================================================================
-// SECTION 1 — FORWARD DECLARATIONS
-// =============================================================================
 struct TreeNode;
 struct File;
 class  TTFS;
