@@ -12,9 +12,6 @@ struct File;
 class  TTFS;
 
 
-// -----------------------------------------------------------------------------
-// 2A. CustomVector<T>  —  doubling dynamic array
-// -----------------------------------------------------------------------------
 template <typename T>
 class CustomVector {
 public:
@@ -63,9 +60,6 @@ private:
     }
 };
 
-// -----------------------------------------------------------------------------
-// 2B. CustomHashMap<V>  —  int→V  separate-chaining, prime buckets, LF 0.75
-// -----------------------------------------------------------------------------
 template <typename V>
 struct HEntry {
     int    key;
@@ -120,7 +114,6 @@ public:
     bool contains(int key) const { return get(key) != nullptr; }
     int  size()            const { return entry_count; }
 
-    // Iterate all entries — used by GC and inverted index
     template <typename Fn>
     void for_each(Fn fn) const {
         for (int i = 0; i < bucket_count; ++i)
@@ -164,9 +157,6 @@ private:
     static int _next_prime(int n) { while (!_is_prime(n)) ++n; return n; }
 };
 
-// -----------------------------------------------------------------------------
-// 2C. MaxHeap<T, Cmp>  —  array-backed binary heap
-// -----------------------------------------------------------------------------
 template <typename T, typename Cmp>
 class MaxHeap {
 public:
@@ -206,35 +196,24 @@ private:
     void _grow() { int nc=cap*2; T* t=new T[nc]; for(int i=0;i<sz;++i)t[i]=heap[i]; delete[]heap; heap=t; cap=nc; }
 };
 
-// =============================================================================
-// SECTION 3 — CORE DATA MODELS
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// TreeNode  —  one version node in the version DAG
-//   Extra fields for LCA binary lifting and GC mark bit
-// -----------------------------------------------------------------------------
-static const int LOG_N = 18;   // supports 2^18 = 262144 versions
+static const int LOG_N = 18;   
 
 struct TreeNode {
     int         version_id;
     std::string content;
     std::string snapshot_message;
     time_t      created_timestamp;
-    time_t      snapshot_timestamp;   // 0 = not a snapshot
+    time_t      snapshot_timestamp;   
 
     TreeNode*   parent;
     TreeNode**  children;
     int         children_count;
     int         children_capacity;
 
-    // LCA binary lifting table  anc[k] = 2^k-th ancestor
     TreeNode*   anc[LOG_N];
 
-    // depth from root (0-based)
     int depth;
 
-    // GC mark bit
     bool gc_marked;
 
     TreeNode(int id, const std::string& cnt, TreeNode* par, int dep)
@@ -246,7 +225,6 @@ struct TreeNode {
         _init_children();
         for (int k = 0; k < LOG_N; ++k) anc[k] = nullptr;
         anc[0] = par;
-        // fill higher ancestors
         if (par) {
             for (int k = 1; k < LOG_N; ++k) {
                 if (anc[k-1]) anc[k] = anc[k-1]->anc[k-1];
@@ -290,15 +268,12 @@ private:
     }
 };
 
-// -----------------------------------------------------------------------------
-// File  —  holds one file's entire version tree + LCA data
-// -----------------------------------------------------------------------------
 struct File {
     std::string               filename;
     TreeNode*                 root;
-    TreeNode*                 active_version;   // HEAD
+    TreeNode*                 active_version;   
     int                       total_versions;
-    CustomHashMap<TreeNode*>  version_map;      // id -> node*
+    CustomHashMap<TreeNode*>  version_map;    
 
     explicit File(const std::string& name)
         : filename(name), root(nullptr), active_version(nullptr), total_versions(0)
@@ -313,9 +288,6 @@ struct File {
     File& operator=(const File&) = delete;
 };
 
-// =============================================================================
-// SECTION 4 — HEAP COMPARATORS
-// =============================================================================
 struct RecentCmp { bool operator()(File* a, File* b) const {
     time_t ta = a->active_version ? a->active_version->created_timestamp : 0;
     time_t tb = b->active_version ? b->active_version->created_timestamp : 0;
@@ -325,21 +297,13 @@ struct VolumeCmp { bool operator()(File* a, File* b) const {
     return a->total_versions > b->total_versions;
 }};
 
-// =============================================================================
-// SECTION 5 — ALGORITHM A: MYERS DIFF
-//   Finds the Shortest Edit Script (SES) between two line arrays.
-//   O(ND) time and O(N+D) space where D = edit distance.
-//   This is the exact algorithm used by GNU diff and Git.
-// =============================================================================
 
-// Edit type
 enum EditKind { EDIT_EQ, EDIT_INS, EDIT_DEL };
 struct Edit {
     EditKind kind;
     std::string line;
 };
 
-// Split a string into lines, stored in a CustomVector
 static void split_lines(const std::string& s, CustomVector<std::string>& out) {
     std::istringstream ss(s);
     std::string line;
@@ -347,8 +311,6 @@ static void split_lines(const std::string& s, CustomVector<std::string>& out) {
     if (out.empty()) out.push_back(s);
 }
 
-// Myers' algorithm core.
-// Returns the edit script from 'a' to 'b'.
 static CustomVector<Edit> myers_diff(
         const CustomVector<std::string>& a,
         const CustomVector<std::string>& b)
@@ -356,12 +318,8 @@ static CustomVector<Edit> myers_diff(
     int N = a.size(), M = b.size();
     int MAX = N + M;
 
-    // V[k] stores the furthest-reaching x on diagonal k.
-    // We offset by MAX so diagonal k maps to index k+MAX.
     int* V = new int[2 * MAX + 2]();
 
-    // trace[d] stores a copy of V after d edits — needed for backtracking.
-    // We store up to MAX+1 traces.
     int** trace = new int*[MAX + 1];
     for (int d = 0; d <= MAX; ++d) trace[d] = nullptr;
 
@@ -369,19 +327,17 @@ static CustomVector<Edit> myers_diff(
     V[MAX + 1] = 0;
 
     for (int d = 0; d <= MAX; ++d) {
-        // Save snapshot
         trace[d] = new int[2 * MAX + 2];
         for (int i = 0; i < 2*MAX+2; ++i) trace[d][i] = V[i];
 
         for (int k = -d; k <= d; k += 2) {
             int x;
             if (k == -d || (k != d && V[MAX+k-1] < V[MAX+k+1]))
-                x = V[MAX + k + 1];          // move down (insert)
+                x = V[MAX + k + 1];         
             else
-                x = V[MAX + k - 1] + 1;      // move right (delete)
+                x = V[MAX + k - 1] + 1;    
 
             int y = x - k;
-            // Extend along diagonal (matching lines)
             while (x < N && y < M && a[x] == b[y]) { ++x; ++y; }
             V[MAX + k] = x;
 
@@ -390,7 +346,6 @@ static CustomVector<Edit> myers_diff(
     }
 done:
 
-    // Backtrack to reconstruct the edit script
     CustomVector<Edit> script;
 
     if (found_d < 0) {
