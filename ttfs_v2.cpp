@@ -1,27 +1,3 @@
-// =============================================================================
-//  Time-Travelling File System  v2.0  —  Resume Edition
-//
-//  NEW ALGORITHMS vs v1:
-//   A. Myers Diff  — O(ND) shortest-edit-script, exactly what Git uses
-//   B. Three-Way Merge + conflict detection — LCS-based, produces <<<===>>> markers
-//   C. Lowest Common Ancestor (LCA) with Binary Lifting — O(N log N) pre-process,
-//      O(log N) query; used automatically by merge to find the base commit
-//   D. Mark-and-Sweep Garbage Collector — frees unreachable orphan nodes after
-//      branch deletion, mirrors JVM/Go GC mechanics
-//   E. Trie — O(L) prefix autocomplete over all filenames
-//   F. Inverted Index — word→postings search across all file versions
-//   G. Write-Ahead Log + Undo/Redo — every mutation is reversible
-//
-//  Constraints maintained:
-//   - ZERO STL containers  (no vector/map/set/list/stack/queue)
-//   - Only <iostream> <string> <sstream> <ctime> <cstddef> <cstring> <cstdlib>
-//   - All data structures built from raw pointers
-//   - Full recursive destructors, zero memory leaks
-//   - Single self-contained compilable file
-//
-//  Compile:
-//   g++ -std=c++17 -Wall -Wextra -O2 -fsanitize=address,undefined -o ttfs ttfs_v2.cpp
-// =============================================================================
 
 #include <iostream>
 #include <string>
